@@ -1,0 +1,1155 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>분기별 자산 관리 트래커 (Quarterly Wealth Tracker)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0284c7',
+                            600: '#0369a1',
+                            700: '#075985',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800&display=swap');
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 min-h-screen flex flex-col transition-colors duration-200">
+
+    <!-- Header -->
+    <header class="sticky top-0 z-30 bg-white/90 dark:bg-slate-800/90 backdrop-blur border-b border-slate-200 dark:border-slate-700 px-4 sm:px-8 py-3.5 flex items-center justify-between shadow-sm">
+        <div class="flex items-center gap-3">
+            <div class="p-2.5 bg-brand-600 text-white rounded-xl shadow-md">
+                <i data-lucide="pie-chart" class="w-5 h-5"></i>
+            </div>
+            <div>
+                <h1 class="text-lg font-bold tracking-tight text-slate-900 dark:text-white leading-tight">Quarterly Asset Tracker</h1>
+                <p class="text-xs text-slate-500 dark:text-slate-400">맞춤형 대분류/소분류 자산 증감 트래킹 (2026년 4분기 기준 시작)</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-1.5 sm:gap-2">
+            <button onclick="exportData()" title="데이터 백업 (다운로드)" class="p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">
+                <i data-lucide="download" class="w-4 h-4"></i>
+            </button>
+            <label title="데이터 복구 (불러오기)" class="p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition cursor-pointer">
+                <i data-lucide="upload" class="w-4 h-4"></i>
+                <input type="file" id="importInput" accept=".json" class="hidden" onchange="importData(event)">
+            </label>
+            <button onclick="resetSampleData()" title="샘플 데이터로 초기화" class="p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">
+                <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+            </button>
+            <div class="h-4 w-[1px] bg-slate-200 dark:bg-slate-700 mx-1"></div>
+            <button onclick="toggleTheme()" title="다크 모드 토글" class="p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">
+                <i data-lucide="sun" class="w-4 h-4 hidden dark:block"></i>
+                <i data-lucide="moon" class="w-4 h-4 block dark:hidden"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+
+        <!-- 1. 총 자산 현황 및 대분류별 비율 카드 요약 -->
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <!-- 총 순자산 -->
+            <div class="sm:col-span-2 lg:col-span-2 bg-gradient-to-br from-brand-600 to-brand-700 text-white p-5 rounded-2xl shadow-md flex flex-col justify-between">
+                <div>
+                    <span class="text-xs font-medium opacity-80 block mb-1">현재 총 순자산</span>
+                    <h2 id="cardGrandTotal" class="text-3xl font-extrabold tracking-tight">₩0</h2>
+                </div>
+                <div class="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-xs">
+                    <span id="cardDiffTitle" class="opacity-90">전분기 대비 증감</span>
+                    <span id="cardDiffBadge" class="font-bold px-2 py-0.5 rounded-full bg-white/20">0%</span>
+                </div>
+            </div>
+
+            <!-- 대분류 1: 주식 -->
+            <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">📈 주식</span>
+                    <span id="shareStock" class="text-[11px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-300">0%</span>
+                </div>
+                <div>
+                    <h3 id="catTotalStock" class="text-lg font-bold text-slate-900 dark:text-white">₩0</h3>
+                    <p class="text-[11px] text-slate-400 mt-0.5">4개 항목 합산</p>
+                </div>
+            </div>
+
+            <!-- 대분류 2: 예금/현금 -->
+            <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">🏦 예금/현금</span>
+                    <span id="shareCash" class="text-[11px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-300">0%</span>
+                </div>
+                <div>
+                    <h3 id="catTotalCash" class="text-lg font-bold text-slate-900 dark:text-white">₩0</h3>
+                    <p class="text-[11px] text-slate-400 mt-0.5">3개 항목 합산</p>
+                </div>
+            </div>
+
+            <!-- 대분류 3: 연금 & 부동산 합산 정보 -->
+            <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between space-y-2">
+                <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/60 pb-1.5">
+                    <div class="flex items-center gap-1.5">
+                        <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">🪙 연금</span>
+                        <span id="sharePension" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-300">0%</span>
+                    </div>
+                    <span id="catTotalPension" class="text-xs font-bold text-slate-800 dark:text-slate-200">₩0</span>
+                </div>
+                <div class="flex items-center justify-between pt-0.5">
+                    <div class="flex items-center gap-1.5">
+                        <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">🏢 부동산</span>
+                        <span id="shareRealEstate" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 dark:bg-purple-950/50 dark:text-purple-300">0%</span>
+                    </div>
+                    <span id="catTotalRealEstate" class="text-xs font-bold text-slate-800 dark:text-slate-200">₩0</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. 자산 현황 기입 및 분기 스냅샷 입력 섹션 -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- 1번 기능: 자산 항목별 현황 기입 (11개 소분류) -->
+            <div class="lg:col-span-8 bg-white dark:bg-slate-800 p-5 sm:p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-5">
+                <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-3">
+                    <h3 class="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                        <i data-lucide="edit-3" class="w-4 h-4 text-brand-600"></i> 1. 자산 현황 기입 (소분류별 잔액 입력)
+                    </h3>
+                    <span class="text-xs text-slate-400">실시간 자동 합산</span>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5 text-xs">
+                    
+                    <!-- 1. 주식 카테고리 -->
+                    <div class="bg-slate-50 dark:bg-slate-700/40 p-4 rounded-xl border border-slate-100 dark:border-slate-700/70 space-y-2.5">
+                        <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-600 pb-1.5 font-bold text-blue-600 dark:text-blue-400">
+                            <span>📈 1. 주식</span>
+                            <span id="subGroupTotal_stock">₩0</span>
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 dark:text-slate-300 mb-1">1-1. 삼성증권 일본</label>
+                            <input type="number" id="input_stock_samsung_jp" placeholder="0" oninput="calculateAllTotals()" class="w-full bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg p-2 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500">
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 dark:text-slate-300 mb-1">1-2. 삼성증권 미국</label>
+                            <input type="number" id="input_stock_samsung_us" placeholder="0" oninput="calculateAllTotals()" class="w-full bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg p-2 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500">
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 dark:text-slate-300 mb-1">1-3. 메리츠증권 미국</label>
+                            <input type="number" id="input_stock_meritz_us" placeholder="0" oninput="calculateAllTotals()" class="w-full bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg p-2 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500">
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 dark:text-slate-300 mb-1">1-4. 한국투자증권 한국</label>
+                            <input type="number" id="input_stock_koreainvest_kr" placeholder="0" oninput="calculateAllTotals()" class="w-full bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg p-2 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500">
+                        </div>
+                    </div>
+
+                    <!-- 2. 예금/현금 카테고리 -->
+                    <div class="bg-slate-50 dark:bg-slate-700/40 p-4 rounded-xl border border-slate-100 dark:border-slate-700/70 space-y-2.5">
+                        <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-600 pb-1.5 font-bold text-emerald-600 dark:text-emerald-400">
+                            <span>🏦 2. 예금 / 현금</span>
+                            <span id="subGroupTotal_cash">₩0</span>
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 dark:text-slate-300 mb-1">2-1. 케이뱅크 예금</label>
+                            <input type="number" id="input_cash_kbank_deposit" placeholder="0" oninput="calculateAllTotals()" class="w-full bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg p-2 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500">
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 dark:text-slate-300 mb-1">2-2. 케이뱅크 파킹</label>
+                            <input type="number" id="input_cash_kbank_parking" placeholder="0" oninput="calculateAllTotals()" class="w-full bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg p-2 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500">
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 dark:text-slate-300 mb-1">2-3. 카카오뱅크 파킹</label>
+                            <input type="number" id="input_cash_kakaobank_parking" placeholder="0" oninput="calculateAllTotals()" class="w-full bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg p-2 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500">
+                        </div>
+                    </div>
+
+                    <!-- 3. 연금 카테고리 -->
+                    <div class="bg-slate-50 dark:bg-slate-700/40 p-4 rounded-xl border border-slate-100 dark:border-slate-700/70 space-y-2.5">
+                        <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-600 pb-1.5 font-bold text-amber-600 dark:text-amber-400">
+                            <span>🪙 3. 연금</span>
+                            <span id="subGroupTotal_pension">₩0</span>
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 dark:text-slate-300 mb-1">3-1. 삼성증권 연금</label>
+                            <input type="number" id="input_pension_samsung" placeholder="0" oninput="calculateAllTotals()" class="w-full bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg p-2 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500">
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 dark:text-slate-300 mb-1">3-2. 한국투자증권 연금</label>
+                            <input type="number" id="input_pension_koreainvest" placeholder="0" oninput="calculateAllTotals()" class="w-full bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg p-2 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500">
+                        </div>
+                        <div>
+                            <label class="block text-slate-600 dark:text-slate-300 mb-1">3-3. 삼성증권 ISA</label>
+                            <input type="number" id="input_pension_isa_samsung" placeholder="0" oninput="calculateAllTotals()" class="w-full bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg p-2 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500">
+                        </div>
+                    </div>
+
+                    <!-- 4. 부동산 카테고리 -->
+                    <div class="bg-slate-50 dark:bg-slate-700/40 p-4 rounded-xl border border-slate-100 dark:border-slate-700/70 space-y-2.5 flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-600 pb-1.5 font-bold text-purple-600 dark:text-purple-400">
+                                <span>🏢 4. 부동산</span>
+                                <span id="subGroupTotal_realestate">₩0</span>
+                            </div>
+                            <div class="mt-2.5">
+                                <label class="block text-slate-600 dark:text-slate-300 mb-1">4-1. 오피스텔</label>
+                                <input type="number" id="input_realestate_officetel" placeholder="0" oninput="calculateAllTotals()" class="w-full bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg p-2 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500">
+                            </div>
+                        </div>
+                        <div class="p-2.5 bg-brand-50 dark:bg-brand-950/30 rounded-lg border border-brand-100 dark:border-brand-900 text-brand-700 dark:text-brand-300 text-[11px] mt-2">
+                            💡 모든 수치는 입력 시 우측 및 상단에 즉시 합산 처리됩니다.
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- 2번 기능: 분기에 한번 자산 기록 (분기초) & 비중 차트 -->
+            <div class="lg:col-span-4 flex flex-col gap-6">
+                
+                <!-- 분기 스냅샷 저장 폼 -->
+                <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-3">
+                        <h3 class="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 text-sm">
+                            <i data-lucide="bookmark-plus" class="w-4 h-4 text-brand-600"></i> 2. 분기초 자산 스냅샷 저장
+                        </h3>
+                    </div>
+
+                    <form onsubmit="handleSaveQuarterSnapshot(event)" class="space-y-3 text-xs">
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block font-medium text-slate-600 dark:text-slate-300 mb-1">연도 선택</label>
+                                <select id="selectYear" class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg p-2 text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-brand-500">
+                                    <!-- Dynamic Years -->
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block font-medium text-slate-600 dark:text-slate-300 mb-1">분기 선택</label>
+                                <select id="selectQuarter" class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg p-2 text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-brand-500">
+                                    <option value="Q1">1분기 초 (1월)</option>
+                                    <option value="Q2">2분기 초 (4월)</option>
+                                    <option value="Q3">3분기 초 (7월)</option>
+                                    <option value="Q4">4분기 초 (10월)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-50 dark:bg-slate-700/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="text-slate-500 dark:text-slate-400">기록될 총 순자산:</span>
+                                <span id="formCalcNetWorth" class="text-sm font-extrabold text-brand-600 dark:text-brand-400">₩0</span>
+                            </div>
+                            <p class="text-[11px] text-slate-400">왼쪽 11개 소분류 입력값이 함께 저장됩니다.</p>
+                        </div>
+
+                        <div>
+                            <label class="block font-medium text-slate-600 dark:text-slate-300 mb-1">비고 / 메모 (선택)</label>
+                            <input type="text" id="inputSnapshotMemo" placeholder="예: 상여금 수령, 오피스텔 보증금 상환 등" class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg p-2 text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-brand-500">
+                        </div>
+
+                        <button type="submit" class="w-full py-3 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold shadow-md shadow-brand-600/20 transition flex items-center justify-center gap-1.5 text-xs">
+                            <i data-lucide="check-circle" class="w-4 h-4"></i> 해당 분기 기록 저장하기
+                        </button>
+                    </form>
+                </div>
+
+                <!-- 실시간 자산 비중 도넛 차트 -->
+                <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
+                    <div class="flex items-center justify-between">
+                        <h3 class="font-bold text-slate-800 dark:text-slate-100 text-xs flex items-center gap-2">
+                            <i data-lucide="pie-chart" class="w-3.5 h-3.5 text-brand-600"></i> 자산 대분류 비중 (도넛)
+                        </h3>
+                        <span id="donutTotalText" class="text-[11px] font-semibold text-slate-400"></span>
+                    </div>
+                    <div class="relative w-full h-52 flex items-center justify-center">
+                        <canvas id="donutChart"></canvas>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- 3 & 4번 기능: 누적 자산 성장 추이 시각화 그래프 -->
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- 1. 자산 성장 추이 (선 그래프) -->
+            <div class="bg-white dark:bg-slate-800 p-5 sm:p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
+                <div class="flex items-center justify-between">
+                    <h3 class="font-bold text-slate-800 dark:text-slate-100 text-sm flex items-center gap-2">
+                        <i data-lucide="trending-up" class="w-4 h-4 text-brand-600"></i> 분기별 누적 총 자산 추이
+                    </h3>
+                    <span class="text-xs text-slate-400">성장 궤적</span>
+                </div>
+                <div class="relative w-full h-60">
+                    <canvas id="trendLineChart"></canvas>
+                </div>
+            </div>
+
+            <!-- 2. 대분류별 구성 변화 (스택 막대 그래프) -->
+            <div class="bg-white dark:bg-slate-800 p-5 sm:p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
+                <div class="flex items-center justify-between">
+                    <h3 class="font-bold text-slate-800 dark:text-slate-100 text-sm flex items-center gap-2">
+                        <i data-lucide="bar-chart-3" class="w-4 h-4 text-brand-600"></i> 분기별 카테고리 구성 변화
+                    </h3>
+                    <span class="text-xs text-slate-400">대분류별 기여도</span>
+                </div>
+                <div class="relative w-full h-60">
+                    <canvas id="stackedBarChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3 & 4번 기능: 누적 기록 및 분기별 증감 내역 테이블 -->
+        <section class="bg-white dark:bg-slate-800 p-5 sm:p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 text-base">
+                        <i data-lucide="history" class="w-4 h-4 text-brand-600"></i> 분기별 자산 증감 및 누적 기록 히스토리
+                    </h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">행을 클릭하면 각 분기별 11개 소분류 상세 잔액을 확인할 수 있습니다.</p>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+                <table class="w-full text-left text-xs sm:text-sm">
+                    <thead class="bg-slate-100 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300 font-semibold border-b border-slate-200 dark:border-slate-700">
+                        <tr>
+                            <th class="p-3">분기</th>
+                            <th class="p-3 text-right">총 순자산</th>
+                            <th class="p-3 text-right">전분기 대비 증감(₩)</th>
+                            <th class="p-3 text-right">증감률(%)</th>
+                            <th class="p-3">주요 메모</th>
+                            <th class="p-3 text-center">수정 / 삭제</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyTableBody" class="divide-y divide-slate-100 dark:divide-slate-700/50 bg-white dark:bg-slate-800">
+                        <!-- Dynamic History Rows -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-slate-800 dark:bg-slate-100 text-white dark:text-slate-900 px-4 py-2.5 rounded-xl text-xs font-medium shadow-lg transition-all duration-300 opacity-0 translate-y-10 flex items-center gap-2 z-50">
+        <i data-lucide="info" class="w-4 h-4 text-brand-400"></i>
+        <span id="toastMsg">알림 메시지</span>
+    </div>
+
+    <!-- Application Script Logic -->
+    <script>
+        // 소분류 Key 정의
+        const ITEM_KEYS = [
+            'stock_samsung_jp', 'stock_samsung_us', 'stock_meritz_us', 'stock_koreainvest_kr',
+            'cash_kbank_deposit', 'cash_kbank_parking', 'cash_kakaobank_parking',
+            'pension_samsung', 'pension_koreainvest', 'pension_isa_samsung',
+            'realestate_officetel'
+        ];
+
+        // 대분류 그룹핑 매핑
+        const CATEGORIES = {
+            stock: ['stock_samsung_jp', 'stock_samsung_us', 'stock_meritz_us', 'stock_koreainvest_kr'],
+            cash: ['cash_kbank_deposit', 'cash_kbank_parking', 'cash_kakaobank_parking'],
+            pension: ['pension_samsung', 'pension_koreainvest', 'pension_isa_samsung'],
+            realestate: ['realestate_officetel']
+        };
+
+        const CATEGORY_NAMES = {
+            stock: '주식',
+            cash: '예금/현금',
+            pension: '연금',
+            realestate: '부동산'
+        };
+
+        const ITEM_LABELS = {
+            stock_samsung_jp: '삼성증권 일본',
+            stock_samsung_us: '삼성증권 미국',
+            stock_meritz_us: '메리츠증권 미국',
+            stock_koreainvest_kr: '한국투자증권 한국',
+            cash_kbank_deposit: '케이뱅크 예금',
+            cash_kbank_parking: '케이뱅크 파킹',
+            cash_kakaobank_parking: '카카오뱅크 파킹',
+            pension_samsung: '삼성증권 연금',
+            pension_koreainvest: '한국투자증권 연금',
+            pension_isa_samsung: '삼성증권 ISA',
+            realestate_officetel: '오피스텔'
+        };
+
+        // 초기 샘플 데이터 세팅 (2026년 4분기부터 시작)
+        const SAMPLE_HISTORY = [
+            {
+                id: 'snap_2026_q4',
+                quarterKey: '2026-Q4',
+                year: 2026,
+                quarter: 'Q4',
+                memo: '2026년 4분기 초기 자산 정산 (시작 기준점)',
+                items: {
+                    stock_samsung_jp: 6500000,
+                    stock_samsung_us: 26000000,
+                    stock_meritz_us: 13500000,
+                    stock_koreainvest_kr: 14000000,
+                    cash_kbank_deposit: 12000000,
+                    cash_kbank_parking: 6000000,
+                    cash_kakaobank_parking: 4000000,
+                    pension_samsung: 11000000,
+                    pension_koreainvest: 9000000,
+                    pension_isa_samsung: 11500000,
+                    realestate_officetel: 82000000
+                }
+            }
+        ];
+
+        let historyData = [];
+        let donutChartInstance = null;
+        let trendChartInstance = null;
+        let stackedChartInstance = null;
+        let expandedRowId = null;
+
+        window.onload = function() {
+            lucide.createIcons();
+            initYearSelect();
+            initTheme();
+            loadData();
+            populateFormWithLatest();
+            renderApp();
+        };
+
+        function initYearSelect() {
+            const select = document.getElementById('selectYear');
+            const startYear = 2026;
+            select.innerHTML = '';
+            // 2026년부터 향후 6년(2026 ~ 2032) 선택 가능
+            for (let y = startYear; y <= startYear + 6; y++) {
+                const opt = document.createElement('option');
+                opt.value = y;
+                opt.textContent = `${y}년`;
+                if (y === startYear) opt.selected = true;
+                select.appendChild(opt);
+            }
+            // 분기 기본값을 4분기(Q4)로 지정
+            const qSelect = document.getElementById('selectQuarter');
+            if (qSelect) {
+                qSelect.value = 'Q4';
+            }
+        }
+
+        function initTheme() {
+            if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        }
+
+        function toggleTheme() {
+            if (document.documentElement.classList.contains('dark')) {
+                document.documentElement.classList.remove('dark');
+                localStorage.theme = 'light';
+            } else {
+                document.documentElement.classList.add('dark');
+                localStorage.theme = 'dark';
+            }
+            renderCharts();
+        }
+
+        const STORAGE_KEY = 'quarterly_wealth_data_2026q4';
+
+        function loadData() {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (stored) {
+                try {
+                    const parsed = JSON.parse(stored);
+                    historyData = Array.isArray(parsed) && parsed.length > 0 ? parsed : JSON.parse(JSON.stringify(SAMPLE_HISTORY));
+                } catch (e) {
+                    historyData = JSON.parse(JSON.stringify(SAMPLE_HISTORY));
+                }
+            } else {
+                historyData = JSON.parse(JSON.stringify(SAMPLE_HISTORY));
+                saveData();
+            }
+        }
+
+        function saveData() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(historyData));
+        }
+
+        function resetSampleData() {
+            if (confirm('2026년 4분기 시작 데이터로 초기화하시겠습니까?')) {
+                historyData = JSON.parse(JSON.stringify(SAMPLE_HISTORY));
+                saveData();
+                populateFormWithLatest();
+                renderApp();
+                showToast('2026년 4분기 초기 데이터로 복원되었습니다.');
+            }
+        }
+
+        // 가장 최근 분기 기록을 기입 폼에 자동 채우기
+        function populateFormWithLatest() {
+            if (historyData.length === 0) return;
+            // 오름차순 정렬 후 마지막
+            const sorted = [...historyData].sort((a, b) => a.quarterKey.localeCompare(b.quarterKey));
+            const latest = sorted[sorted.length - 1];
+
+            ITEM_KEYS.forEach(key => {
+                const val = latest.items && latest.items[key] !== undefined ? latest.items[key] : '';
+                const input = document.getElementById(`input_${key}`);
+                if (input) input.value = val;
+            });
+
+            calculateAllTotals();
+        }
+
+        // 1번 기능: 소분류 입력 시 실시간 대분류 & 총 순자산 계산
+        function calculateAllTotals() {
+            let grandTotal = 0;
+            const groupTotals = { stock: 0, cash: 0, pension: 0, realestate: 0 };
+
+            Object.keys(CATEGORIES).forEach(catKey => {
+                let catSum = 0;
+                CATEGORIES[catKey].forEach(itemKey => {
+                    const inputEl = document.getElementById(`input_${itemKey}`);
+                    const val = Number(inputEl?.value) || 0;
+                    catSum += val;
+                });
+                groupTotals[catKey] = catSum;
+                grandTotal += catSum;
+
+                // 그룹별 소계 라벨 업데이트
+                const grpEl = document.getElementById(`subGroupTotal_${catKey}`);
+                if (grpEl) grpEl.textContent = formatKRW(catSum);
+            });
+
+            // 카드 및 폼 금액 UI 반영
+            document.getElementById('cardGrandTotal').textContent = formatKRW(grandTotal);
+            document.getElementById('formCalcNetWorth').textContent = formatKRW(grandTotal);
+
+            document.getElementById('catTotalStock').textContent = formatKRW(groupTotals.stock);
+            document.getElementById('catTotalCash').textContent = formatKRW(groupTotals.cash);
+            document.getElementById('catTotalPension').textContent = formatKRW(groupTotals.pension);
+            document.getElementById('catTotalRealEstate').textContent = formatKRW(groupTotals.realestate);
+
+            // 비중 계산
+            const shareStock = grandTotal > 0 ? ((groupTotals.stock / grandTotal) * 100).toFixed(1) : 0;
+            const shareCash = grandTotal > 0 ? ((groupTotals.cash / grandTotal) * 100).toFixed(1) : 0;
+            const sharePension = grandTotal > 0 ? ((groupTotals.pension / grandTotal) * 100).toFixed(1) : 0;
+            const shareRealEstate = grandTotal > 0 ? ((groupTotals.realestate / grandTotal) * 100).toFixed(1) : 0;
+
+            document.getElementById('shareStock').textContent = `${shareStock}%`;
+            document.getElementById('shareCash').textContent = `${shareCash}%`;
+            const elPension = document.getElementById('sharePension');
+            if (elPension) elPension.textContent = `${sharePension}%`;
+            const elRealEstate = document.getElementById('shareRealEstate');
+            if (elRealEstate) elRealEstate.textContent = `${shareRealEstate}%`;
+
+            // 전분기 대비 증감 카드 업데이트
+            updateGrandDiffBadge(grandTotal);
+
+            // 도넛 차트 갱신
+            renderDonutChart(groupTotals);
+        }
+
+        function updateGrandDiffBadge(currentGrandTotal) {
+            if (historyData.length === 0) return;
+            const sorted = [...historyData].sort((a, b) => a.quarterKey.localeCompare(b.quarterKey));
+            const lastQuarter = sorted[sorted.length - 1];
+
+            const lastTotal = getSnapshotTotal(lastQuarter);
+            const diff = currentGrandTotal - lastTotal;
+            const percent = lastTotal > 0 ? ((diff / lastTotal) * 100).toFixed(1) : 0;
+
+            const badge = document.getElementById('cardDiffBadge');
+            document.getElementById('cardDiffTitle').textContent = `최근기록(${lastQuarter.quarterKey}) 대비`;
+
+            if (diff > 0) {
+                badge.textContent = `▲ +${formatKRW(diff)} (+${percent}%)`;
+                badge.className = 'font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-200';
+            } else if (diff < 0) {
+                badge.textContent = `▼ ${formatKRW(diff)} (${percent}%)`;
+                badge.className = 'font-bold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-200';
+            } else {
+                badge.textContent = `기준 분기 (변동 없음)`;
+                badge.className = 'font-bold px-2 py-0.5 rounded-full bg-white/20 text-white';
+            }
+        }
+
+        // 스냅샷 총액 계산 지원 함수
+        function getSnapshotTotal(snapshot) {
+            if (!snapshot.items) return 0;
+            return Object.values(snapshot.items).reduce((acc, curr) => acc + (Number(curr) || 0), 0);
+        }
+
+        // 스냅샷 카테고리별 합계 산출
+        function getSnapshotCategoryTotals(snapshot) {
+            const result = { stock: 0, cash: 0, pension: 0, realestate: 0 };
+            if (!snapshot.items) return result;
+
+            Object.keys(CATEGORIES).forEach(cat => {
+                CATEGORIES[cat].forEach(key => {
+                    result[cat] += (Number(snapshot.items[key]) || 0);
+                });
+            });
+            return result;
+        }
+
+        // 전체 화면 UI 렌더링
+        function renderApp() {
+            historyData.sort((a, b) => a.quarterKey.localeCompare(b.quarterKey));
+            renderTable();
+            renderCharts();
+            lucide.createIcons();
+        }
+
+        // 2번 기능: 분기 자산 스냅샷 저장
+        function handleSaveQuarterSnapshot(e) {
+            e.preventDefault();
+            const year = Number(document.getElementById('selectYear').value);
+            const quarter = document.getElementById('selectQuarter').value;
+            const quarterKey = `${year}-${quarter}`;
+            const memo = document.getElementById('inputSnapshotMemo').value.trim();
+
+            // 11개 소분류 값 캡처
+            const currentItems = {};
+            ITEM_KEYS.forEach(key => {
+                const inputEl = document.getElementById(`input_${key}`);
+                currentItems[key] = Number(inputEl?.value) || 0;
+            });
+
+            const existingIdx = historyData.findIndex(item => item.quarterKey === quarterKey);
+
+            if (existingIdx !== -1) {
+                if (confirm(`${quarterKey} 기록이 이미 존재합니다. 현재 입력값으로 덮어쓰시겠습니까?`)) {
+                    historyData[existingIdx].items = currentItems;
+                    historyData[existingIdx].memo = memo || historyData[existingIdx].memo;
+                } else {
+                    return;
+                }
+            } else {
+                historyData.push({
+                    id: 'snap_' + Date.now(),
+                    quarterKey,
+                    year,
+                    quarter,
+                    memo: memo || `${quarter} 자산 스냅샷`,
+                    items: currentItems
+                });
+            }
+
+            saveData();
+            renderApp();
+            document.getElementById('inputSnapshotMemo').value = '';
+            showToast(`${quarterKey} 분기 자산 내역이 정상적으로 저장되었습니다.`);
+            suggestNextQuarter(year, quarter);
+        }
+
+        // 저장 후 다음 분기 자동 추천 (예: 2026-Q4 저장 시 2027-Q1로 자동 전환)
+        function suggestNextQuarter(currentYear, currentQuarter) {
+            let nextYear = currentYear;
+            let nextQuarter = 'Q1';
+            if (currentQuarter === 'Q1') nextQuarter = 'Q2';
+            else if (currentQuarter === 'Q2') nextQuarter = 'Q3';
+            else if (currentQuarter === 'Q3') nextQuarter = 'Q4';
+            else if (currentQuarter === 'Q4') {
+                nextYear = currentYear + 1;
+                nextQuarter = 'Q1';
+            }
+
+            const yearSelect = document.getElementById('selectYear');
+            const quarterSelect = document.getElementById('selectQuarter');
+            if (yearSelect && quarterSelect) {
+                let exists = false;
+                for (let opt of yearSelect.options) {
+                    if (Number(opt.value) === nextYear) { exists = true; break; }
+                }
+                if (!exists) {
+                    const opt = document.createElement('option');
+                    opt.value = nextYear;
+                    opt.textContent = `${nextYear}년`;
+                    yearSelect.appendChild(opt);
+                }
+                yearSelect.value = nextYear;
+                quarterSelect.value = nextQuarter;
+            }
+        }
+
+        // 분기 기록을 입력폼으로 불러와서 수정
+        function editSnapshot(id) {
+            const target = historyData.find(h => h.id === id);
+            if (!target) return;
+
+            const selectYear = document.getElementById('selectYear');
+            const selectQuarter = document.getElementById('selectQuarter');
+            if (selectYear) selectYear.value = target.year;
+            if (selectQuarter) selectQuarter.value = target.quarter;
+
+            const memoInput = document.getElementById('inputSnapshotMemo');
+            if (memoInput) memoInput.value = target.memo || '';
+
+            ITEM_KEYS.forEach(key => {
+                const input = document.getElementById(`input_${key}`);
+                if (input) input.value = target.items && target.items[key] !== undefined ? target.items[key] : '';
+            });
+
+            calculateAllTotals();
+            showToast(`${target.quarterKey} 데이터를 불러왔습니다. 금액 수정 후 다시 저장하세요.`);
+
+            const formSection = document.getElementById('selectYear');
+            if (formSection) {
+                formSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+
+        // 3 & 4번 기능: 누적 테이블 및 증감 계산 (+ 세부 펼치기 기능)
+        function renderTable() {
+            const tbody = document.getElementById('historyTableBody');
+            tbody.innerHTML = '';
+
+            if (historyData.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center py-6 text-slate-400">저장된 분기별 기록이 없습니다.</td></tr>`;
+                return;
+            }
+
+            const displayData = [...historyData].reverse(); // 최신순 정렬
+
+            displayData.forEach((item) => {
+                const originalIdx = historyData.findIndex(h => h.id === item.id);
+                const prevItem = originalIdx > 0 ? historyData[originalIdx - 1] : null;
+
+                const currentTotal = getSnapshotTotal(item);
+                const prevTotal = prevItem ? getSnapshotTotal(prevItem) : 0;
+
+                let diffAmount = 0;
+                let diffPercent = 0;
+                let hasPrev = false;
+
+                if (prevItem) {
+                    hasPrev = true;
+                    diffAmount = currentTotal - prevTotal;
+                    diffPercent = prevTotal > 0 ? ((diffAmount / prevTotal) * 100).toFixed(1) : 0;
+                }
+
+                // 메인 요약 행
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50 dark:hover:bg-slate-700/30 transition cursor-pointer select-none';
+                tr.onclick = (e) => {
+                    // 삭제 및 수정 버튼 클릭 시 이벤트 버블링 방지
+                    if (e.target.closest('.delete-btn') || e.target.closest('.edit-btn')) return;
+                    toggleRowExpand(item.id);
+                };
+
+                let diffText = '-';
+                let percentText = '-';
+                let diffClass = 'text-slate-500 dark:text-slate-400';
+
+                if (hasPrev) {
+                    if (diffAmount > 0) {
+                        diffText = `+${formatKRW(diffAmount)}`;
+                        percentText = `+${diffPercent}%`;
+                        diffClass = 'text-emerald-600 dark:text-emerald-400 font-bold';
+                    } else if (diffAmount < 0) {
+                        diffText = formatKRW(diffAmount);
+                        percentText = `${diffPercent}%`;
+                        diffClass = 'text-rose-600 dark:text-rose-400 font-bold';
+                    } else {
+                        diffText = '₩0';
+                        percentText = '0%';
+                        diffClass = 'text-slate-400';
+                    }
+                }
+
+                const isExpanded = expandedRowId === item.id;
+
+                tr.innerHTML = `
+                    <td class="p-3 font-bold text-slate-900 dark:text-slate-100 whitespace-nowrap">
+                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 dark:bg-slate-700 rounded-lg text-brand-600 dark:text-brand-400">
+                            <i data-lucide="${isExpanded ? 'chevron-down' : 'chevron-right'}" class="w-3.5 h-3.5"></i>
+                            ${item.quarterKey}
+                        </span>
+                    </td>
+                    <td class="p-3 text-right font-extrabold text-slate-900 dark:text-white whitespace-nowrap">${formatKRW(currentTotal)}</td>
+                    <td class="p-3 text-right whitespace-nowrap ${diffClass}">${diffText}</td>
+                    <td class="p-3 text-right whitespace-nowrap ${diffClass}">${percentText}</td>
+                    <td class="p-3 text-slate-600 dark:text-slate-300 max-w-xs truncate">${escapeHtml(item.memo)}</td>
+                    <td class="p-3 text-center whitespace-nowrap space-x-1">
+                        <button onclick="editSnapshot('${item.id}')" class="edit-btn text-slate-400 hover:text-brand-600 p-1.5 rounded-lg hover:bg-brand-50 dark:hover:bg-brand-950/30 transition" title="입력폼으로 불러와 수정">
+                            <i data-lucide="edit-3" class="w-4 h-4"></i>
+                        </button>
+                        <button onclick="deleteSnapshot('${item.id}')" class="delete-btn text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 transition" title="삭제">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+
+                // 펼침 세부 소분류 행
+                if (isExpanded) {
+                    const detailTr = document.createElement('tr');
+                    detailTr.className = 'bg-slate-50/80 dark:bg-slate-800/80 border-b-2 border-brand-500/20';
+
+                    const catSums = getSnapshotCategoryTotals(item);
+                    const prevCatSums = prevItem ? getSnapshotCategoryTotals(prevItem) : null;
+
+                    let subRowsHtml = '';
+                    Object.keys(CATEGORIES).forEach(catKey => {
+                        const catName = CATEGORY_NAMES[catKey];
+                        const catTotal = catSums[catKey];
+
+                        subRowsHtml += `<div class="bg-white dark:bg-slate-700 p-3 rounded-xl border border-slate-200 dark:border-slate-600 shadow-2xs space-y-1.5">
+                            <div class="flex justify-between font-bold border-b border-slate-100 dark:border-slate-600 pb-1 text-slate-800 dark:text-slate-100">
+                                <span>${catName}</span>
+                                <span>${formatKRW(catTotal)}</span>
+                            </div>
+                            <div class="space-y-1 text-[11px] text-slate-600 dark:text-slate-300">`;
+
+                        CATEGORIES[catKey].forEach(itemKey => {
+                            const val = item.items && item.items[itemKey] !== undefined ? item.items[itemKey] : 0;
+                            const prevVal = prevItem && prevItem.items ? (prevItem.items[itemKey] || 0) : null;
+                            let subDiffText = '';
+                            if (prevVal !== null) {
+                                const d = val - prevVal;
+                                if (d > 0) subDiffText = `<span class="text-emerald-500 font-medium">(+${formatKRW(d)})</span>`;
+                                else if (d < 0) subDiffText = `<span class="text-rose-500 font-medium">(${formatKRW(d)})</span>`;
+                            }
+
+                            subRowsHtml += `<div class="flex justify-between">
+                                <span>${ITEM_LABELS[itemKey]}</span>
+                                <span>${formatKRW(val)} ${subDiffText}</span>
+                            </div>`;
+                        });
+
+                        subRowsHtml += `</div></div>`;
+                    });
+
+                    detailTr.innerHTML = `
+                        <td colspan="6" class="p-4">
+                            <div class="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-1.5">
+                                <i data-lucide="layers" class="w-3.5 h-3.5 text-brand-600"></i> ${item.quarterKey} 소분류 자산 세부 내역
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                ${subRowsHtml}
+                            </div>
+                        </td>
+                    `;
+                    tbody.appendChild(detailTr);
+                }
+            });
+        }
+
+        function toggleRowExpand(id) {
+            expandedRowId = (expandedRowId === id) ? null : id;
+            renderTable();
+            lucide.createIcons();
+        }
+
+        function deleteSnapshot(id) {
+            if (confirm('해당 분기 기록을 삭제하시겠습니까?')) {
+                historyData = historyData.filter(h => h.id !== id);
+                saveData();
+                renderApp();
+                showToast('분기 기록이 삭제되었습니다.');
+            }
+        }
+
+        // Chart.js 트렌드 및 구성 시각화 차트들
+        function renderCharts() {
+            renderTrendLineChart();
+            renderStackedBarChart();
+            calculateAllTotals();
+        }
+
+        // 도넛 차트 조각 위 백분율(%) 표시 커스텀 플러그인
+        const donutSlicePercentagePlugin = {
+            id: 'donutSlicePercentage',
+            afterDatasetsDraw(chart) {
+                const { ctx, data } = chart;
+                if (!data.datasets.length) return;
+                const dataset = data.datasets[0];
+                const total = dataset.data.reduce((sum, val) => sum + (Number(val) || 0), 0);
+                if (!total || total <= 0) return;
+
+                const meta = chart.getDatasetMeta(0);
+                if (!meta || !meta.data) return;
+
+                meta.data.forEach((element, index) => {
+                    const value = Number(dataset.data[index]) || 0;
+                    if (value <= 0) return;
+                    const percentage = (value / total) * 100;
+                    if (percentage < 6) return; // 6% 미만의 작은 조각은 텍스트 겹침 방지를 위해 조각 내 표시는 생략 (범례에 표시)
+
+                    const pos = element.tooltipPosition();
+                    if (!pos || isNaN(pos.x) || isNaN(pos.y)) return;
+
+                    ctx.save();
+                    ctx.font = 'bold 11px Pretendard, system-ui, -apple-system, sans-serif';
+                    ctx.fillStyle = '#ffffff';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    
+                    // 텍스트 그림자 효과로 조각 위에서 선명하게 보이도록 처리
+                    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+                    ctx.shadowBlur = 4;
+                    ctx.shadowOffsetX = 0;
+                    ctx.shadowOffsetY = 1;
+                    
+                    ctx.fillText(`${percentage.toFixed(1)}%`, pos.x, pos.y);
+                    ctx.restore();
+                });
+            }
+        };
+
+        // 실시간 도넛 차트
+        function renderDonutChart(groupTotals) {
+            const ctx = document.getElementById('donutChart').getContext('2d');
+            if (donutChartInstance) donutChartInstance.destroy();
+
+            const isDark = document.documentElement.classList.contains('dark');
+            const total = (groupTotals.stock + groupTotals.cash + groupTotals.pension + groupTotals.realestate) || 0;
+
+            const totalTextEl = document.getElementById('donutTotalText');
+            if (totalTextEl) {
+                totalTextEl.textContent = total > 0 ? `합계 ${formatKRW(total)}` : '';
+            }
+
+            donutChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                plugins: [donutSlicePercentagePlugin],
+                data: {
+                    labels: ['주식', '예금/현금', '연금', '부동산'],
+                    datasets: [{
+                        data: [groupTotals.stock, groupTotals.cash, groupTotals.pension, groupTotals.realestate],
+                        backgroundColor: ['#0284c7', '#10b981', '#f59e0b', '#8b5cf6'],
+                        borderWidth: 2,
+                        borderColor: isDark ? '#1e293b' : '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                boxWidth: 10,
+                                font: { size: 11, weight: '600' },
+                                color: isDark ? '#cbd5e1' : '#475569',
+                                generateLabels(chart) {
+                                    const data = chart.data;
+                                    if (!data.labels.length || !data.datasets.length) return [];
+                                    const dataset = data.datasets[0];
+                                    const sum = dataset.data.reduce((a, b) => a + (Number(b) || 0), 0);
+                                    return data.labels.map((label, i) => {
+                                        const value = Number(dataset.data[i]) || 0;
+                                        const pct = sum > 0 ? ((value / sum) * 100).toFixed(1) : '0.0';
+                                        const isVisible = chart.getDataVisibility(i);
+                                        return {
+                                            text: `${label} (${pct}%)`,
+                                            fillStyle: dataset.backgroundColor[i],
+                                            strokeStyle: isDark ? '#1e293b' : '#ffffff',
+                                            lineWidth: 1,
+                                            hidden: !isVisible,
+                                            index: i
+                                        };
+                                    });
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => {
+                                    const datasetTotal = ctx.dataset.data.reduce((a, b) => a + (Number(b) || 0), 0);
+                                    const pct = datasetTotal > 0 ? ((ctx.raw / datasetTotal) * 100).toFixed(1) : '0.0';
+                                    return ` ${ctx.label}: ${formatKRW(ctx.raw)} (${pct}%)`;
+                                }
+                            }
+                        }
+                    },
+                    cutout: '60%'
+                }
+            });
+        }
+
+        // 분기별 순자산 추이 선 차트
+        function renderTrendLineChart() {
+            const isDark = document.documentElement.classList.contains('dark');
+            const textColor = isDark ? '#94a3b8' : '#64748b';
+
+            const labels = historyData.map(h => h.quarterKey);
+            const totals = historyData.map(h => getSnapshotTotal(h));
+
+            const ctx = document.getElementById('trendLineChart').getContext('2d');
+            if (trendChartInstance) trendChartInstance.destroy();
+
+            trendChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '총 순자산',
+                        data: totals,
+                        borderColor: '#0284c7',
+                        backgroundColor: 'rgba(2, 132, 199, 0.12)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.2,
+                        pointBackgroundColor: '#0369a1',
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: { label: ctx => ` 총 자산: ${formatKRW(ctx.raw)}` }
+                        }
+                    },
+                    scales: {
+                        x: { ticks: { color: textColor, font: { size: 10 } }, grid: { display: false } },
+                        y: {
+                            ticks: {
+                                color: textColor, font: { size: 10 },
+                                callback: val => (val / 100000000) >= 1 ? (val / 100000000).toFixed(1) + '억' : (val / 10000) + '만'
+                            },
+                            grid: { color: isDark ? '#334155' : '#f1f5f9' }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 분기별 스택 막대 차트 (대분류 구성비)
+        function renderStackedBarChart() {
+            const isDark = document.documentElement.classList.contains('dark');
+            const textColor = isDark ? '#94a3b8' : '#64748b';
+
+            const labels = historyData.map(h => h.quarterKey);
+            const stockData = [];
+            const cashData = [];
+            const pensionData = [];
+            const realestateData = [];
+
+            historyData.forEach(h => {
+                const catSums = getSnapshotCategoryTotals(h);
+                stockData.push(catSums.stock);
+                cashData.push(catSums.cash);
+                pensionData.push(catSums.pension);
+                realestateData.push(catSums.realestate);
+            });
+
+            const ctx = document.getElementById('stackedBarChart').getContext('2d');
+            if (stackedChartInstance) stackedChartInstance.destroy();
+
+            stackedChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: '주식', data: stockData, backgroundColor: '#0284c7' },
+                        { label: '예금/현금', data: cashData, backgroundColor: '#10b981' },
+                        { label: '연금', data: pensionData, backgroundColor: '#f59e0b' },
+                        { label: '부동산', data: realestateData, backgroundColor: '#8b5cf6' }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top', labels: { boxWidth: 10, font: { size: 10 } } },
+                        tooltip: {
+                            callbacks: { label: ctx => ` ${ctx.dataset.label}: ${formatKRW(ctx.raw)}` }
+                        }
+                    },
+                    scales: {
+                        x: { stacked: true, ticks: { color: textColor, font: { size: 10 } }, grid: { display: false } },
+                        y: {
+                            stacked: true,
+                            ticks: {
+                                color: textColor, font: { size: 10 },
+                                callback: val => (val / 100000000) >= 1 ? (val / 100000000).toFixed(1) + '억' : (val / 10000) + '만'
+                            },
+                            grid: { color: isDark ? '#334155' : '#f1f5f9' }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 유틸리티
+        function formatKRW(amount) {
+            return new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(amount || 0);
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>"']/g, function(m) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+            });
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMsg').textContent = msg;
+            toast.classList.remove('opacity-0', 'translate-y-10');
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-10');
+            }, 2500);
+        }
+
+        // 백업 및 복구
+        function exportData() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(historyData, null, 2));
+            const anchor = document.createElement('a');
+            anchor.setAttribute("href", dataStr);
+            anchor.setAttribute("download", `Asset_Backup_${new Date().toISOString().slice(0,10)}.json`);
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+            showToast('백업 파일이 성공적으로 다운로드되었습니다.');
+        }
+
+        function importData(e) {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const imported = JSON.parse(event.target.result);
+                    if (Array.isArray(imported)) {
+                        historyData = imported;
+                        saveData();
+                        populateFormWithLatest();
+                        renderApp();
+                        showToast('자산 데이터가 정상적으로 복구되었습니다.');
+                    } else {
+                        alert('올바르지 않은 백업 파일 형식입니다.');
+                    }
+                } catch (err) {
+                    alert('파일을 불러오는 도중 오류가 발생했습니다.');
+                }
+            };
+            if (e.target.files[0]) {
+                reader.readAsText(e.target.files[0]);
+            }
+        }
+    </script>
+</body>
+</html>
